@@ -1,8 +1,14 @@
+.idea
+config.json
+runtime/*
+!runtime/.gitkeep
+
 # Binaries for programs and plugins
 *.exe
 *.dll
 *.so
 *.dylib
+gooffroadmaster
 
 # Test binary, build with `go test -c`
 *.test
