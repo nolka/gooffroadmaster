@@ -2,29 +2,28 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/nolka/gogpslib"
-	"github.com/nolka/gogpslib/writer"
-	"gopkg.in/telegram-bot-api.v4"
-	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"strings"
+
+	"github.com/nolka/gooffroadmaster/component"
+	"github.com/nolka/gooffroadmaster/util"
+	"gopkg.in/telegram-bot-api.v4"
 )
 
 func main() {
-	config := getConfig()
+	util.EnsureDirectories()
 
-	log.Printf("Runtime dir: %s\n", config.RuntimeDir)
+	config := getConfig()
 
 	bot, err := tgbotapi.NewBotAPI(config.Token)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	bot.Debug = true
+	bot.Debug = config.IsDebug
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -33,24 +32,32 @@ func main() {
 
 	updates, err := bot.GetUpdatesChan(u)
 	var results = make(chan tgbotapi.MessageConfig)
+	manager := component.NewComponentManager(bot, results)
+	manager.RegisterComponent(component.NewTrackConverter(manager, util.GetRuntimePath()))
 
+	subscribeInterrupt(manager)
+
+	go resultsSender(results, bot)
 	for update := range updates {
-		if update.CallbackQuery != nil {
-			handleCallback(&update, bot, results, config)
+		if update.Message != nil {
+			log.Printf("[%s] => %s\n", update.Message.From.UserName, update.Message.Text)
 		}
-		if update.Message == nil {
-			continue
-		}
-
-		log.Printf("[%s] %s", update.Message.From.UserName, update.Message.Text)
-		switch update.Message.Chat.Type {
-		case "private":
-			handlePrivateMessage(&update, bot, results)
-		default:
-			handleChannelMessage(&update, bot, results)
-		}
-
+		go func() {
+			manager.Dispatch(update)
+		}()
 	}
+}
+
+func subscribeInterrupt(manager *component.ComponentManager) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		for sig := range c {
+			log.Printf("SIG %s", sig.String())
+			manager.Halt()
+			os.Exit(1)
+		}
+	}()
 }
 
 func getConfig() *Config {
@@ -70,8 +77,8 @@ func getConfig() *Config {
 		log.Printf("CONF PARSE ERR: %s", err)
 	}
 
-	cfg.WorkDir = getStartupPath()
-	cfg.RuntimeDir = cfg.WorkDir + string(os.PathSeparator) + "runtime";
+	cfg.WorkDir = util.GetStartupPath()
+	cfg.RuntimeDir = cfg.WorkDir + string(os.PathSeparator) + "runtime"
 	return cfg
 }
 
@@ -113,81 +120,6 @@ func resultsSender(message chan tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
 	}
 }
 
-func handleCallback(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results chan tgbotapi.MessageConfig, cfg *Config) {
-	if update.CallbackQuery == nil {
-		log.Printf("ERR Callback data empty\n")
-		return
-	}
-	parts := strings.Split(update.CallbackQuery.Data, "|")
-	cmd, fileId, destFormat := parts[0], parts[1], parts[2]
-
-	log.Printf("%s, %s, %s", cmd, fileId, destFormat)
-	file, err := bot.GetFile(tgbotapi.FileConfig{fileId})
-	if err != nil {
-		log.Println("GET FILE ERR: " + err.Error())
-	}
-
-	response, err := http.Get(file.Link(cfg.Token))
-	if err != nil {
-		log.Println("DL FILE ERR: " + err.Error())
-	}
-	defer response.Body.Close()
-
-	var srcFn string = cfg.RuntimeDir + "/" + update.CallbackQuery.Message.ReplyToMessage.Document.FileName
-	out, err := os.Create(srcFn)
-	if err != nil {
-		log.Println("MK FILE ERR: " + err.Error())
-	}
-	defer out.Close()
-
-	n, err := io.Copy(out, response.Body)
-	if err != nil {
-		log.Println("COPY FILE ERR: " + err.Error())
-	}
-
-	log.Printf("File downloaded success. Bytes read: %d", n)
-
-	newName := convertFile(srcFn, destFormat)
-	log.Printf("Sending file: %s", newName)
-	doc := tgbotapi.NewDocumentUpload(update.CallbackQuery.Message.ReplyToMessage.Chat.ID, newName)
-	doc.ReplyToMessageID = update.CallbackQuery.Message.ReplyToMessage.MessageID
-	bot.Send(doc)
-}
-
-func convertFile(srcFile string, dstFormat string) string {
-	converters := map[string]gogpslib.FormatReaderWriter{
-		".plt": &gogpslib.PltFormat{},
-		".gpx": &gogpslib.GpxFormat{},
-	}
-
-	ext := filepath.Ext(srcFile)
-	basename := filepath.Base(srcFile)
-	newName := strings.TrimSuffix(basename, filepath.Ext(basename)) + dstFormat
-
-	src := converters[ext]
-	src.Read(srcFile)
-
-	dst := converters[dstFormat]
-	dst.SetSegments(src.GetSegments())
-
-	w := writer.CreateStringWriter()
-	dst.WriteSegments(w)
-	w.Write()
-
-	abs, _ := filepath.Abs(srcFile)
-	destFileName := filepath.Dir(abs) + string(os.PathSeparator) + newName
-
-	d, err := os.Create(destFileName)
-	if err != nil {
-		log.Printf("Error creating dest file name: %s", destFileName)
-	}
-	defer d.Close()
-
-	d.Write([]byte(w.Content))
-
-	return destFileName
-}
-
 func handleChannelMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results chan tgbotapi.MessageConfig) {
 	message := update.Message
 
@@ -196,7 +128,7 @@ func handleChannelMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results
 		if strings.HasPrefix(message.Text, "/") {
 			cmd := parseCommand(message.Text)
 			if cmd == nil {
-				return;
+				return
 			}
 			result, err := cmd.Handle(message, bot)
 			if err != nil {
@@ -205,41 +137,6 @@ func handleChannelMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results
 			}
 			results <- result
 			return
-		}
-
-		if message.Document != nil {
-			doc := message.Document
-
-			if strings.HasSuffix(doc.FileName, ".gpx") || strings.HasSuffix(doc.FileName, ".plt") {
-
-				var buttons []tgbotapi.InlineKeyboardButton
-				var known_formats = []string{
-					".plt",
-					".gpx",
-				}
-
-				for _, fmt := range known_formats {
-					if strings.HasSuffix(doc.FileName, fmt) {
-						continue
-					}
-					var data string = "convert|" + doc.FileID + "|" + fmt
-					buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("конвертнуть в "+fmt, data))
-				}
-
-				buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("Дать в пердак", "give_anal"))
-
-				markup := tgbotapi.NewInlineKeyboardMarkup(
-					tgbotapi.NewInlineKeyboardRow(
-						buttons...
-					),
-				)
-				msg := tgbotapi.NewMessage(message.Chat.ID, "")
-				msg.ReplyToMessageID = message.MessageID
-				msg.ParseMode = "HTML"
-				msg.ReplyMarkup = markup
-				msg.Text = "Wanna some conversions?"
-				results <- msg
-			}
 		}
 	}()
 }

@@ -1,12 +1,13 @@
 package main
 
 type Config struct {
-	Token string
-	WorkDir string
+	IsDebug    bool
+	Token      string
+	WorkDir    string
 	RuntimeDir string
 }
 
 type ConversionInfo struct {
-	Id string
+	Id        string
 	ConvertTo string
 }

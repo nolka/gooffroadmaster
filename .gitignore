@@ -1,7 +1,7 @@
 .idea
 config.json
-runtime/*
-!runtime/.gitkeep
+runtime
+config
 
 # Binaries for programs and plugins
 *.exe
