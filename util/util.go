@@ -98,3 +98,12 @@ func DownloadFile(url, dest string) (int64, error) {
 	log.Printf("File downloaded success. Bytes read: %d\n", n)
 	return n, nil
 }
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == os.ErrNotExist {
+		log.Printf("File %s does not exists!", path)
+		return false
+	}
+	return true
+}
