@@ -34,6 +34,7 @@ func main() {
 	var results = make(chan tgbotapi.MessageConfig)
 	manager := component.NewComponentManager(bot, results)
 	manager.RegisterComponent(component.NewTrackConverter(manager, util.GetRuntimePath()))
+	manager.RegisterComponent(component.NewInteractiveMenu(manager))
 
 	subscribeInterrupt(manager)
 
