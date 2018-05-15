@@ -16,19 +16,31 @@ import (
 	"gopkg.in/telegram-bot-api.v4"
 )
 
-func NewTrackConverter(manager *ComponentManager, startdir string) *TrackConverter {
+const (
+	defaultConverterID = 2
+)
+
+type conversionCallback func(srcFile string, destFormat string) (string, error)
+
+func NewTrackConverter(manager *ComponentManager, runtimeDir string) *TrackConverter {
 	c := &TrackConverter{}
 	util.LoadConfig(c)
 	c.Init(manager)
-	c.RuntimeDir = startdir
+	if c.RuntimeDir == "" {
+		c.RuntimeDir = runtimeDir
+	}
+	if c.ConverterId == 0 {
+		c.ConverterId = defaultConverterID
+	}
 	return c
 }
 
 type TrackConverter struct {
-	Manager    *ComponentManager `json:"-"`
-	Id         int               `json:"-"`
-	RuntimeDir string            `json:"runtime_dir"`
-	BinaryName string            `json:"binary_name"`
+	Manager     *ComponentManager `json:"-"`
+	Id          int               `json:"-"`
+	RuntimeDir  string            `json:"runtime_dir"`
+	BinaryName  string            `json:"binary_name"`
+	ConverterId int               `json:"converter_id"`
 }
 
 func (t *TrackConverter) SetId(id int) {
@@ -62,14 +74,8 @@ func (t *TrackConverter) HandleMessage(update tgbotapi.Update) {
 		}
 
 		var buttons []tgbotapi.InlineKeyboardButton
-		var known_formats = []string{
-			".plt",
-			".gpx",
-			".kml",
-			".kmz",
-		}
 
-		for _, format := range known_formats {
+		for _, format := range t.GetKnownFormatsMap() {
 			if strings.HasSuffix(doc.FileName, format) {
 				continue
 			}
@@ -101,22 +107,17 @@ func (t *TrackConverter) GetKnownFormatsMap() map[string]string {
 }
 
 func (t *TrackConverter) IsKnownFormat(format string) bool {
-	fmtmap := t.GetKnownFormatsMap()
-	keys := make([]string, 0, len(fmtmap))
-	for k := range fmtmap {
-		keys = append(keys, k)
-	}
-
-	_, ok := fmtmap[format]
-	if ok {
-		return true
+	for ext, _ := range t.GetKnownFormatsMap() {
+		if format == ext {
+			return true
+		}
 	}
 	return false
 }
 
 func (t *TrackConverter) HandleCallback(update tgbotapi.Update) {
 	if update.CallbackQuery == nil {
-		log.Printf("ERR Callback data empty\n")
+		log.Println("ERR Callback data empty")
 		return
 	}
 	parts := strings.Split(update.CallbackQuery.Data, "|")
@@ -126,27 +127,48 @@ func (t *TrackConverter) HandleCallback(update tgbotapi.Update) {
 	file, err := t.Manager.Bot.GetFile(tgbotapi.FileConfig{fileID})
 	if err != nil {
 		log.Println("GET FILE ERR: " + err.Error())
+		return
 	}
 
-	srcFn := t.RuntimeDir + "/" + update.CallbackQuery.Message.ReplyToMessage.Document.FileName
-	util.DownloadFile(file.Link(t.Manager.Bot.Token), srcFn)
+	srcFileName := t.RuntimeDir + "/" + update.CallbackQuery.Message.ReplyToMessage.Document.FileName
+	util.DownloadFile(file.Link(t.Manager.Bot.Token), srcFileName)
 	if err != nil {
 		log.Printf("Error downloading file: %s\n", err)
+		return
 	}
 
-	newName, err, _, _ := t.convertUsingGpsBabel(srcFn, destFormat)
-	if err != nil {
-		msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
-		msg.ReplyToMessageID = update.CallbackQuery.Message.MessageID
-		msg.Text = "Не удалось сконвертировать файл :("
-		t.Manager.Results <- msg
+	var newFileName string
+	switch t.ConverterId {
+	case 1:
+		{
+			newFileName, err = t.convert(srcFileName, destFormat, t.ConvertInternalFile)
+			break
+		}
+	case 2:
+	default:
+		{
+			newFileName, err = t.convert(srcFileName, destFormat, t.ConvertUsingGpsBabel)
+			break
+		}
 	}
-	log.Printf("Sending file: %s", newName)
-	doc := tgbotapi.NewDocumentUpload(update.CallbackQuery.Message.ReplyToMessage.Chat.ID, newName)
+
+	if err != nil {
+		log.Printf("Failed to convert file: %s\n", err)
+		return
+	}
+
+	log.Printf("Sending file: %s", newFileName)
+	doc := tgbotapi.NewDocumentUpload(update.CallbackQuery.Message.ReplyToMessage.Chat.ID, newFileName)
 	doc.ReplyToMessageID = update.CallbackQuery.Message.ReplyToMessage.MessageID
 	t.Manager.Bot.Send(doc)
 
-	os.Remove(newName)
+	// Here we can make some tracks cache
+	os.Remove(newFileName)
+	os.Remove(srcFileName)
+}
+
+func (t *TrackConverter) convert(srcFile, destFormat string, converter conversionCallback) (string, error) {
+	return converter(srcFile, destFormat)
 }
 
 func (t *TrackConverter) TrackToArguments(srcFile, dstFormat string) (string, string, string, string) {
@@ -158,7 +180,7 @@ func (t *TrackConverter) TrackToArguments(srcFile, dstFormat string) (string, st
 	return srcFormat, srcFile, formatMap[dstFormat], destFileName
 }
 
-func (t *TrackConverter) convertUsingGpsBabel(srcFile, dstFormat string) (string, error, string, string) {
+func (t *TrackConverter) ConvertUsingGpsBabel(srcFile, dstFormat string) (string, error) {
 	srcFormat, srcFile, dstFormat, dstFileName := t.TrackToArguments(srcFile, dstFormat)
 
 	cmd := exec.Command(t.GetGpsbabelPath(), "-i", srcFormat, "-f", srcFile, "-o", dstFormat, "-F", dstFileName)
@@ -170,18 +192,18 @@ func (t *TrackConverter) convertUsingGpsBabel(srcFile, dstFormat string) (string
 	cmd.Wait()
 	if err != nil {
 		log.Printf("CONVERT ERR: %s\n%s\n%s\n", err.Error(), stdout.String(), stderr.String())
-		return "", err, stdout.String(), stderr.String()
+		return "", err
 	}
 
 	log.Printf("Successfully converted. Output is:\n%s", stdout.String())
-	return dstFileName, nil, stdout.String(), stderr.String()
+	return dstFileName, nil
 }
 
 func (t *TrackConverter) GetGpsbabelPath() string {
 	return t.RuntimeDir + string(os.PathSeparator) + t.BinaryName
 }
 
-func convertFile(srcFile string, dstFormat string) string {
+func (t *TrackConverter) ConvertInternalFile(srcFile, dstFormat string) (string, error) {
 	converters := map[string]gogpslib.FormatReaderWriter{
 		".plt": &gogpslib.PltFormat{},
 		".gpx": &gogpslib.GpxFormat{},
@@ -207,11 +229,12 @@ func convertFile(srcFile string, dstFormat string) string {
 	d, err := os.Create(destFileName)
 	if err != nil {
 		log.Printf("Error creating dest file name: %s", destFileName)
+		return "", fmt.Errorf("Error creating dest file name: %s", destFileName)
 	}
 	defer d.Close()
 	defer os.Remove(srcFile)
 
 	d.Write([]byte(w.Content))
 
-	return destFileName
+	return destFileName, nil
 }

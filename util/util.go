@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 func GetStartupPath() string {
@@ -106,4 +107,8 @@ func FileExists(path string) bool {
 		return false
 	}
 	return true
+}
+
+func MakePath(pathparts ...string) string {
+	return strings.Join(pathparts, string(os.PathSeparator))
 }
