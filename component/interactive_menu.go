@@ -40,6 +40,9 @@ func (i *InteractiveMenu) PrepareData(d ...string) string {
 }
 
 func (i *InteractiveMenu) HandleMessage(update tgbotapi.Update) {
+	if update.Message.Chat.Type != "private" {
+		return;
+	}
 	userId := update.Message.From.ID
 	_, ok := i.UserList[userId]
 	if !ok {
