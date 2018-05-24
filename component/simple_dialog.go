@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gopkg.in/telegram-bot-api.v4"
 	"log"
+	"strconv"
 	"strings"
 )
 
@@ -24,48 +25,71 @@ func (s *HelloState) OnEnter(msg *tgbotapi.Message) {
 	if msg.Chat.Type != "private"{
 		return;
 	}
-	s.Query("Okay! Hello there!", msg)
+	s.Say("Okay! Hello there!", msg)
 	s.Reg = &RegistrationInfo{}
 }
 
 func (s *HelloState) OnExit(msg *tgbotapi.Message) {
 }
 
+func (s *HelloState) PrepareData(d ...string) string {
+	return fmt.Sprintf("%d|%s", s.Manager.Menu.Id, strings.Join(d, "|"))
+}
+
+
 func (s *HelloState) Update(msg *tgbotapi.Message) {
 	if s.msgCount == 0 {
-		s.Query("Please, enter your first name", msg)
+		s.Say("Please, enter your first name", msg)
 		s.msgCount++
 		return
 	}
 	if s.Reg.FirstName == "" {
 		s.Reg.FirstName = msg.Text
-		s.Query("Please, enter Last Name!", msg)
+		s.Say("Please, enter Last Name!", msg)
 		return
 	}
 
 	if s.Reg.LastName == "" {
 		s.Reg.LastName = msg.Text
-		s.Query("Okay! We are ready to enter to the world on journey! Write EnterOne to enter...", msg)
-		return
 	}
 
 	if !s.Reg.Approved {
-		s.Query("Type 'agree' to confirm your registration!", msg)
+		s.QueryConfirmation(msg)
 	}
 
-	log.Printf("HELLO STATE: %s\n", msg)
-	if strings.ToLower(msg.Text) == "agree" {
+	log.Printf("HELO: %s\n", msg)
+}
+
+func (s *HelloState) QueryConfirmation(msg *tgbotapi.Message) {
+	markup := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Confirm", s.PrepareData(strconv.Itoa(msg.From.ID), "yes")),
+			tgbotapi.NewInlineKeyboardButtonData("Cancel", s.PrepareData(strconv.Itoa(msg.From.ID), "no")),
+		),
+	)
+	c := tgbotapi.NewMessage(msg.Chat.ID, "")
+	c.ReplyToMessageID = msg.MessageID
+	c.ReplyMarkup = markup
+	c.Text = "Confirm registration"
+	s.Manager.Menu.Manager.Results <- c
+}
+
+func (s *HelloState) UpdateCallback(msg *tgbotapi.CallbackQuery, userId int) {
+	parts := strings.Split(msg.Data, "|")
+
+	if parts[2] == "yes" {
 		ns := &EnterOne{s.Manager}
 		s.Manager.SaveData(s.Reg)
 		s.Manager.SetState(ns)
 		return
+	} else {
+		s.Say("Registration aborted", msg.Message)
 	}
-	log.Printf("HELO: %s\n", msg)
 }
 
-func (s *HelloState) Query(text string, prevMsg *tgbotapi.Message) {
+func (s *HelloState) Say(text string, prevMsg *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(prevMsg.Chat.ID, text)
-	s.Manager.ComponentManager.Results <- msg
+	s.Manager.Menu.Manager.Results <- msg
 }
 
 type EnterOne struct {
@@ -91,7 +115,11 @@ func (s *EnterOne) Update(msg *tgbotapi.Message) {
 	}
 }
 
+func (s *EnterOne) UpdateCallback(msg *tgbotapi.CallbackQuery, userId int) {
+
+}
+
 func (s *EnterOne) Query(text string, prevMsg *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(prevMsg.Chat.ID, text)
-	s.Manager.ComponentManager.Results <- msg
+	s.Manager.Menu.Manager.Results <- msg
 }

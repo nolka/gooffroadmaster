@@ -9,7 +9,7 @@ import (
 	"gopkg.in/telegram-bot-api.v4"
 )
 
-func NewInteractiveMenu(manager *ComponentManager) *InteractiveMenu {
+func NewInteractiveMenu(manager *Router) *InteractiveMenu {
 	c := &InteractiveMenu{}
 	util.LoadConfig(c)
 	c.Init(manager)
@@ -17,8 +17,8 @@ func NewInteractiveMenu(manager *ComponentManager) *InteractiveMenu {
 }
 
 type InteractiveMenu struct {
-	Manager  *ComponentManager           `json:"-"`
-	Id       int                         `json:"-"`
+	Manager  *Router               `json:"-"`
+	Id       int                   `json:"-"`
 	UserList map[int]*StateManager `json:"-"`
 }
 
@@ -26,7 +26,7 @@ func (i *InteractiveMenu) SetId(id int) {
 	i.Id = id
 }
 
-func (i *InteractiveMenu) Init(manager *ComponentManager) {
+func (i *InteractiveMenu) Init(manager *Router) {
 	i.Manager = manager
 	i.UserList = make(map[int]*StateManager)
 }
@@ -44,16 +44,22 @@ func (i *InteractiveMenu) HandleMessage(update tgbotapi.Update) {
 		return;
 	}
 	userId := update.Message.From.ID
-	_, ok := i.UserList[userId]
+	s, ok := i.UserList[userId]
 	if !ok {
-		log.Printf("Creating state mgr for user: %s\n", userId)
-		i.UserList[userId] = InitNewManager(i.Manager, nil, update.Message)
+		log.Printf("Creating state mgr for user: %d\n", userId)
+		s = InitNewManager(i, nil, update.Message)
+		i.UserList[userId] = s
 	}
-	s := i.UserList[userId]
 	log.Printf("Dispatching state message to user id: %d\n", userId)
 	s.Update(update.Message)
 }
 
 func (i *InteractiveMenu) HandleCallback(update tgbotapi.Update) {
-
+	userId := update.CallbackQuery.From.ID
+	s, ok := i.UserList[userId]
+	if !ok {
+		log.Printf("Error handling callback because user id: %d was not requested this action!\n", userId)
+		return
+	}
+	s.UpdateCallback(update.CallbackQuery, userId)
 }

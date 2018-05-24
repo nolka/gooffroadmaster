@@ -8,18 +8,19 @@ type StateInterface interface {
 	OnEnter(msg *tgbotapi.Message)
 	OnExit(msg *tgbotapi.Message)
 	Update(msg *tgbotapi.Message)
+	UpdateCallback(callback *tgbotapi.CallbackQuery, userId int)
 }
 
 type StateManager struct {
-	ComponentManager *ComponentManager
+	Menu *InteractiveMenu
 	StateStack []StateInterface
 	LastMessage *tgbotapi.Message
 	SavedData interface{}
 }
 
-func InitNewManager(componentMgr *ComponentManager, initState *StateInterface, lastMessage *tgbotapi.Message) *StateManager {
+func InitNewManager(menu *InteractiveMenu, initState *StateInterface, lastMessage *tgbotapi.Message) *StateManager {
 	mgr := &StateManager{}
-	mgr.ComponentManager = componentMgr
+	mgr.Menu = menu
 	mgr.LastMessage = lastMessage
 	if initState == nil {
 		s := new(HelloState)
@@ -58,15 +59,6 @@ func (s *StateManager) Update(msg *tgbotapi.Message) {
 	s.GetState().Update(msg)
 }
 
-/**
-	Base state
- */
-type State struct {
-}
-
-type UpdateArgs struct {
-
-}
-
-func (s *State) Update(args UpdateArgs) {
+func (s *StateManager) UpdateCallback(msg *tgbotapi.CallbackQuery, userId int) {
+	s.GetState().UpdateCallback(msg, userId)
 }
