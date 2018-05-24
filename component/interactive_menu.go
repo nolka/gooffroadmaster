@@ -47,7 +47,7 @@ func (i *InteractiveMenu) HandleMessage(update tgbotapi.Update) {
 		i.UserList[userId] = InitNewManager(i.Manager, nil, update.Message)
 	}
 	s := i.UserList[userId]
-	log.Printf("Dispatching state message to user id: %s\n", userId)
+	log.Printf("Dispatching state message to user id: %d\n", userId)
 	s.Update(update.Message)
 }
 

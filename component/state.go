@@ -14,6 +14,7 @@ type StateManager struct {
 	ComponentManager *ComponentManager
 	StateStack []StateInterface
 	LastMessage *tgbotapi.Message
+	SavedData interface{}
 }
 
 func InitNewManager(componentMgr *ComponentManager, initState *StateInterface, lastMessage *tgbotapi.Message) *StateManager {
@@ -28,12 +29,16 @@ func InitNewManager(componentMgr *ComponentManager, initState *StateInterface, l
 	return mgr
 }
 
-func (s *StateManager) GetState() StateInterface {
-	return s.StateStack[len(s.StateStack)-1]
+func(s *StateManager) SaveData(data interface{}) {
+	s.SavedData = data
 }
 
-func (s *StateManager) GetPrevState() *StateInterface {
-	return &s.StateStack[len(s.StateStack)-2]
+func(s *StateManager) GetSavedData() interface{} {
+	return s.SavedData
+}
+
+func (s *StateManager) GetState() StateInterface {
+	return s.StateStack[len(s.StateStack)-1]
 }
 
 func (s *StateManager) SetState(state StateInterface) {

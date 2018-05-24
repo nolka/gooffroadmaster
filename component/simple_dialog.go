@@ -9,13 +9,23 @@ import (
 
 type HelloState struct {
 	Manager   *StateManager
-	FirstName string
+	Reg *RegistrationInfo
 	LastName  string
 	msgCount  int
 }
 
+type RegistrationInfo struct {
+	FirstName string
+	LastName string
+	Approved bool
+}
+
 func (s *HelloState) OnEnter(msg *tgbotapi.Message) {
+	if msg.Chat.Type != "private"{
+		return;
+	}
 	s.Query("Okay! Hello there!", msg)
+	s.Reg = &RegistrationInfo{}
 }
 
 func (s *HelloState) OnExit(msg *tgbotapi.Message) {
@@ -27,21 +37,26 @@ func (s *HelloState) Update(msg *tgbotapi.Message) {
 		s.msgCount++
 		return
 	}
-	if s.FirstName == "" {
-		s.FirstName = msg.Text
+	if s.Reg.FirstName == "" {
+		s.Reg.FirstName = msg.Text
 		s.Query("Please, enter Last Name!", msg)
 		return
 	}
 
-	if s.LastName == "" {
-		s.LastName = msg.Text
+	if s.Reg.LastName == "" {
+		s.Reg.LastName = msg.Text
 		s.Query("Okay! We are ready to enter to the world on journey! Write EnterOne to enter...", msg)
 		return
 	}
 
+	if !s.Reg.Approved {
+		s.Query("Type 'agree' to confirm your registration!", msg)
+	}
+
 	log.Printf("HELLO STATE: %s\n", msg)
-	if strings.ToLower(msg.Text) == "enterone" {
+	if strings.ToLower(msg.Text) == "agree" {
 		ns := &EnterOne{s.Manager}
+		s.Manager.SaveData(s.Reg)
 		s.Manager.SetState(ns)
 		return
 	}
@@ -57,10 +72,12 @@ type EnterOne struct {
 	Manager *StateManager
 }
 
-func (s *EnterOne) OnEnter(msg *tgbotapi.Message) {
-	var prev HelloState = &s.Manager.GetPrevState()
+type HelloStateFactory func() StateInterface
 
-	s.Query(fmt.Sprintf("%s %s, You are in EnterOne journey world!!", prev.(HelloState).FirstName, prev.(HelloState).LastName), msg)
+func (s *EnterOne) OnEnter(msg *tgbotapi.Message) {
+	var reg *RegistrationInfo = s.Manager.GetSavedData().(*RegistrationInfo)
+
+	s.Query(fmt.Sprintf("%s %s, You are in EnterOne journey world!!", reg.FirstName, reg.LastName), msg)
 }
 
 func (s *EnterOne) OnExit(msg *tgbotapi.Message) {
