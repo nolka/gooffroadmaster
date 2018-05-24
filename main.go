@@ -2,15 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/nolka/gooffroadmaster/component"
+	"github.com/nolka/gooffroadmaster/util"
+	"gopkg.in/telegram-bot-api.v4"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
-
-	"github.com/nolka/gooffroadmaster/component"
-	"github.com/nolka/gooffroadmaster/util"
-	"gopkg.in/telegram-bot-api.v4"
 )
 
 func main() {
@@ -32,8 +30,9 @@ func main() {
 
 	updates, err := bot.GetUpdatesChan(u)
 	var results = make(chan tgbotapi.MessageConfig)
-	manager := component.NewComponentManager(bot, results)
-	manager.RegisterComponent(component.NewTrackConverter(manager, util.GetRuntimePath()))
+	manager := component.NewMessageRouter(bot, results)
+	manager.RegisterController(component.NewTrackConverter(manager, util.GetRuntimePath()))
+	manager.RegisterController(component.NewInteractiveMenu(manager))
 
 	subscribeInterrupt(manager)
 
@@ -48,7 +47,13 @@ func main() {
 	}
 }
 
-func subscribeInterrupt(manager *component.ComponentManager) {
+func resultsSender(message chan tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
+	for message := range message {
+		bot.Send(message)
+	}
+}
+
+func subscribeInterrupt(manager *component.Router) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
@@ -82,66 +87,63 @@ func getConfig() *Config {
 	return cfg
 }
 
+//TODO: Move to another controller
+
+
 // func instantiate(p reflect.Type) ExecutableCommand {
 // 	instance := reflect.New(p).Elem()
 // 	return  instance.Interface().(ExecutableCommand)
 // }
 
-func getCommand(cmd string, args []string) ExecutableCommand {
-	for c, instance := range EnumerateCommands() {
-		if cmd == c {
-			// instance := instantiate(typeName).(ExecutableCommand)
-			instance.SetArgs(args)
-			return instance
-		}
-	}
-	return nil
-}
+// func getCommand(cmd string, args []string) ExecutableCommand {
+// 	for c, instance := range EnumerateCommands() {
+// 		if cmd == c {
+// 			// instance := instantiate(typeName).(ExecutableCommand)
+// 			instance.SetArgs(args)
+// 			return instance
+// 		}
+// 	}
+// 	return nil
+// }
 
-func parseCommand(command string) ExecutableCommand {
-	if !strings.HasPrefix(command, "/") {
-		return nil
-	}
-	parts := strings.Split(command[1:], " ")
-	cmd := parts[0]
-	parts = parts[1:]
+// func parseCommand(command string) ExecutableCommand {
+// 	if !strings.HasPrefix(command, "/") {
+// 		return nil
+// 	}
+// 	parts := strings.Split(command[1:], " ")
+// 	cmd := parts[0]
+// 	parts = parts[1:]
+//
+// 	instance := getCommand(cmd, parts)
+// 	if instance == nil {
+// 		log.Printf("Failed to find command handler for '%s'", cmd)
+// 		return nil
+// 	}
+// 	return instance
+// }
 
-	instance := getCommand(cmd, parts)
-	if instance == nil {
-		log.Printf("Failed to find command handler for '%s'", cmd)
-		return nil
-	}
-	return instance
-}
+// func handleChannelMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results chan tgbotapi.MessageConfig) {
+// 	message := update.Message
+//
+// 	go resultsSender(results, bot)
+// 	go func() {
+// 		if strings.HasPrefix(message.Text, "/") {
+// 			cmd := parseCommand(message.Text)
+// 			if cmd == nil {
+// 				return
+// 			}
+// 			result, err := cmd.Handle(message, bot)
+// 			if err != nil {
+// 				log.Printf("ERROR: %s", err)
+// 				return
+// 			}
+// 			results <- result
+// 			return
+// 		}
+// 	}()
+// }
 
-func resultsSender(message chan tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
-	for message := range message {
-		bot.Send(message)
-	}
-}
-
-func handleChannelMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results chan tgbotapi.MessageConfig) {
-	message := update.Message
-
-	go resultsSender(results, bot)
-	go func() {
-		if strings.HasPrefix(message.Text, "/") {
-			cmd := parseCommand(message.Text)
-			if cmd == nil {
-				return
-			}
-			result, err := cmd.Handle(message, bot)
-			if err != nil {
-				log.Printf("ERROR: %s", err)
-				return
-			}
-			results <- result
-			return
-		}
-	}()
-}
-
-func handlePrivateMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results chan tgbotapi.MessageConfig) {
-	message := update.Message
-	log.Println(message.Chat.Title)
-}
+// func handlePrivateMessage(update *tgbotapi.Update, bot *tgbotapi.BotAPI, results chan tgbotapi.MessageConfig) {
+// 	message := update.Message
+// 	log.Println(message.Chat.Title)
+// }

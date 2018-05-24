@@ -22,7 +22,7 @@ const (
 
 type conversionCallback func(srcFile string, destFormat string) (string, error)
 
-func NewTrackConverter(manager *ComponentManager, runtimeDir string) *TrackConverter {
+func NewTrackConverter(manager *Router, runtimeDir string) *TrackConverter {
 	c := &TrackConverter{}
 	util.LoadConfig(c)
 	c.Init(manager)
@@ -36,18 +36,18 @@ func NewTrackConverter(manager *ComponentManager, runtimeDir string) *TrackConve
 }
 
 type TrackConverter struct {
-	Manager     *ComponentManager `json:"-"`
-	Id          int               `json:"-"`
-	RuntimeDir  string            `json:"runtime_dir"`
-	BinaryName  string            `json:"binary_name"`
-	ConverterId int               `json:"converter_id"`
+	Manager     *Router `json:"-"`
+	Id          int     `json:"-"`
+	RuntimeDir  string  `json:"runtime_dir"`
+	BinaryName  string  `json:"binary_name"`
+	ConverterId int     `json:"converter_id"`
 }
 
 func (t *TrackConverter) SetId(id int) {
 	t.Id = id
 }
 
-func (t *TrackConverter) Init(manager *ComponentManager) {
+func (t *TrackConverter) Init(manager *Router) {
 	t.Manager = manager
 }
 
