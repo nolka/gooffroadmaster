@@ -1,4 +1,4 @@
-package component
+package controllers
 
 import (
 	"gopkg.in/telegram-bot-api.v4"
@@ -12,10 +12,10 @@ type StateInterface interface {
 }
 
 type StateManager struct {
-	Menu *InteractiveMenu
-	StateStack []StateInterface
+	Menu        *InteractiveMenu
+	StateStack  []StateInterface
 	LastMessage *tgbotapi.Message
-	SavedData interface{}
+	SavedData   interface{}
 }
 
 func InitNewManager(menu *InteractiveMenu, initState *StateInterface, lastMessage *tgbotapi.Message) *StateManager {
@@ -30,11 +30,11 @@ func InitNewManager(menu *InteractiveMenu, initState *StateInterface, lastMessag
 	return mgr
 }
 
-func(s *StateManager) SaveData(data interface{}) {
+func (s *StateManager) SaveData(data interface{}) {
 	s.SavedData = data
 }
 
-func(s *StateManager) GetSavedData() interface{} {
+func (s *StateManager) GetSavedData() interface{} {
 	return s.SavedData
 }
 

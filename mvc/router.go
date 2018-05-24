@@ -1,4 +1,4 @@
-package component
+package mvc
 
 import (
 	"log"
@@ -45,7 +45,7 @@ func (m *Router) Dispatch(update tgbotapi.Update) {
 		parts := strings.SplitN(update.CallbackQuery.Data, "|", 2)
 		componentId, err := strconv.Atoi(parts[0])
 		if err != nil {
-			log.Printf("Failed to get component id from string: %s. Skipping...\n", parts[0])
+			log.Printf("Failed to get mvc id from string: %s. Skipping...\n", parts[0])
 			return
 		}
 		components := m.GetControllers()

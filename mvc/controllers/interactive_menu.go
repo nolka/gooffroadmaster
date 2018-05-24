@@ -1,7 +1,8 @@
-package component
+package controllers
 
 import (
 	"fmt"
+	"github.com/nolka/gooffroadmaster/mvc"
 	"log"
 	"strings"
 
@@ -9,7 +10,7 @@ import (
 	"gopkg.in/telegram-bot-api.v4"
 )
 
-func NewInteractiveMenu(manager *Router) *InteractiveMenu {
+func NewInteractiveMenu(manager *mvc.Router) *InteractiveMenu {
 	c := &InteractiveMenu{}
 	util.LoadConfig(c)
 	c.Init(manager)
@@ -17,7 +18,7 @@ func NewInteractiveMenu(manager *Router) *InteractiveMenu {
 }
 
 type InteractiveMenu struct {
-	Manager  *Router               `json:"-"`
+	Router   *mvc.Router           `json:"-"`
 	Id       int                   `json:"-"`
 	UserList map[int]*StateManager `json:"-"`
 }
@@ -26,8 +27,8 @@ func (i *InteractiveMenu) SetId(id int) {
 	i.Id = id
 }
 
-func (i *InteractiveMenu) Init(manager *Router) {
-	i.Manager = manager
+func (i *InteractiveMenu) Init(manager *mvc.Router) {
+	i.Router = manager
 	i.UserList = make(map[int]*StateManager)
 }
 

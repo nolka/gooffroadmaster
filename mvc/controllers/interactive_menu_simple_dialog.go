@@ -1,4 +1,4 @@
-package component
+package controllers
 
 import (
 	"fmt"
@@ -71,7 +71,7 @@ func (s *HelloState) QueryConfirmation(msg *tgbotapi.Message) {
 	c.ReplyToMessageID = msg.MessageID
 	c.ReplyMarkup = markup
 	c.Text = "Confirm registration"
-	s.Manager.Menu.Manager.Results <- c
+	s.Manager.Menu.Router.Results <- c
 }
 
 func (s *HelloState) UpdateCallback(msg *tgbotapi.CallbackQuery, userId int) {
@@ -89,7 +89,7 @@ func (s *HelloState) UpdateCallback(msg *tgbotapi.CallbackQuery, userId int) {
 
 func (s *HelloState) Say(text string, prevMsg *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(prevMsg.Chat.ID, text)
-	s.Manager.Menu.Manager.Results <- msg
+	s.Manager.Menu.Router.Results <- msg
 }
 
 type EnterOne struct {
@@ -121,5 +121,5 @@ func (s *EnterOne) UpdateCallback(msg *tgbotapi.CallbackQuery, userId int) {
 
 func (s *EnterOne) Query(text string, prevMsg *tgbotapi.Message) {
 	msg := tgbotapi.NewMessage(prevMsg.Chat.ID, text)
-	s.Manager.Menu.Manager.Results <- msg
+	s.Manager.Menu.Router.Results <- msg
 }
