@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/nolka/gooffroadmaster/component"
+	"github.com/nolka/gooffroadmaster/mvc"
+	"github.com/nolka/gooffroadmaster/mvc/controllers"
 	"github.com/nolka/gooffroadmaster/util"
 	"gopkg.in/telegram-bot-api.v4"
 	"io/ioutil"
@@ -30,9 +31,9 @@ func main() {
 
 	updates, err := bot.GetUpdatesChan(u)
 	var results = make(chan tgbotapi.MessageConfig)
-	manager := component.NewMessageRouter(bot, results)
-	manager.RegisterController(component.NewTrackConverter(manager, util.GetRuntimePath()))
-	manager.RegisterController(component.NewInteractiveMenu(manager))
+	manager := mvc.NewMessageRouter(bot, results)
+	manager.RegisterController(controllers.NewTrackConverter(manager, util.GetRuntimePath()))
+	manager.RegisterController(controllers.NewInteractiveMenu(manager))
 
 	subscribeInterrupt(manager)
 
@@ -53,7 +54,7 @@ func resultsSender(message chan tgbotapi.MessageConfig, bot *tgbotapi.BotAPI) {
 	}
 }
 
-func subscribeInterrupt(manager *component.Router) {
+func subscribeInterrupt(manager *mvc.Router) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {

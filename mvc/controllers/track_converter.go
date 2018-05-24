@@ -1,8 +1,9 @@
-package component
+package controllers
 
 import (
 	"bytes"
 	"fmt"
+	"github.com/nolka/gooffroadmaster/mvc"
 	"log"
 	"os"
 	"os/exec"
@@ -22,7 +23,7 @@ const (
 
 type conversionCallback func(srcFile string, destFormat string) (string, error)
 
-func NewTrackConverter(manager *Router, runtimeDir string) *TrackConverter {
+func NewTrackConverter(manager *mvc.Router, runtimeDir string) *TrackConverter {
 	c := &TrackConverter{}
 	util.LoadConfig(c)
 	c.Init(manager)
@@ -36,7 +37,7 @@ func NewTrackConverter(manager *Router, runtimeDir string) *TrackConverter {
 }
 
 type TrackConverter struct {
-	Manager     *Router `json:"-"`
+	Manager     *mvc.Router `json:"-"`
 	Id          int     `json:"-"`
 	RuntimeDir  string  `json:"runtime_dir"`
 	BinaryName  string  `json:"binary_name"`
@@ -47,7 +48,7 @@ func (t *TrackConverter) SetId(id int) {
 	t.Id = id
 }
 
-func (t *TrackConverter) Init(manager *Router) {
+func (t *TrackConverter) Init(manager *mvc.Router) {
 	t.Manager = manager
 }
 
